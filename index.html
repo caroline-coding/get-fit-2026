@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Fit 2026</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAXcVcENwnLOz8Ske39MztpOo0sQOA91Hs",
+            authDomain: "get-fit-27a94.firebaseapp.com",
+            databaseURL: "https://get-fit-27a94-default-rtdb.firebaseio.com",
+            projectId: "get-fit-27a94",
+            storageBucket: "get-fit-27a94.firebasestorage.app",
+            messagingSenderId: "1095137997947",
+            appId: "1:1095137997947:web:348d15dd087f32f6fb9ede"
+        };
+
+        // Initialize Firebase
+        let db = null;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+        } catch (e) {
+            console.log("Firebase not configured yet");
+        }
+
+        // Challenge configuration
+        const CHALLENGE_START = new Date(2026, 1, 2); // February 2, 2026 (month is 0-indexed)
+        const CHALLENGE_WEEKS = 12;
+        const STARTING_GOAL = 150;
+        const WEEKLY_INCREMENT = 15;
+
+        // Intensity definitions
+        const INTENSITIES = {
+            low: { label: 'Low', points: 1, examples: 'walking, yoga, errands, bowling' },
+            medium: { label: 'Medium', points: 2, examples: 'jogging, rowing, hiking, moderate biking, circuit training' },
+            high: { label: 'High', points: 3, examples: 'running, vigorous biking, jump rope, HIIT' }
+        };
+
+        // Helper functions
+        const getCurrentWeek = () => {
+            const now = new Date();
+            const diffTime = now - CHALLENGE_START;
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays < 0) return 0;
+            return Math.min(Math.floor(diffDays / 7) + 1, CHALLENGE_WEEKS);
+        };
+
+        const getWeeklyGoal = (week) => {
+            if (week < 1) return STARTING_GOAL;
+            return STARTING_GOAL + (week - 1) * WEEKLY_INCREMENT;
+        };
+
+        const getWeekStart = (week) => {
+            const start = new Date(CHALLENGE_START);
+            start.setDate(start.getDate() + (week - 1) * 7);
+            return start;
+        };
+
+        const getWeekEnd = (week) => {
+            const end = getWeekStart(week);
+            end.setDate(end.getDate() + 6);
+            return end;
+        };
+
+        const formatDate = (date) => {
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        };
+
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+
+        // Main App Component
+        function App() {
+            const [currentUser, setCurrentUser] = useState(null);
+            const [users, setUsers] = useState({});
+            const [exercises, setExercises] = useState({});
+            const [teams, setTeams] = useState({});
+            const [view, setView] = useState('home');
+            const [loading, setLoading] = useState(true);
+
+            // Load current user from localStorage
+            useEffect(() => {
+                const savedUserId = localStorage.getItem('currentUserId');
+                if (savedUserId) {
+                    setCurrentUser(savedUserId);
+                }
+            }, []);
+
+            // Firebase listeners
+            useEffect(() => {
+                if (!db) {
+                    setLoading(false);
+                    return;
+                }
+
+                const usersRef = db.ref('users');
+                const exercisesRef = db.ref('exercises');
+                const teamsRef = db.ref('teams');
+
+                usersRef.on('value', (snapshot) => {
+                    setUsers(snapshot.val() || {});
+                });
+
+                exercisesRef.on('value', (snapshot) => {
+                    setExercises(snapshot.val() || {});
+                });
+
+                teamsRef.on('value', (snapshot) => {
+                    setTeams(snapshot.val() || {});
+                    setLoading(false);
+                });
+
+                return () => {
+                    usersRef.off();
+                    exercisesRef.off();
+                    teamsRef.off();
+                };
+            }, []);
+
+            const handleSelectUser = (userId) => {
+                setCurrentUser(userId);
+                localStorage.setItem('currentUserId', userId);
+            };
+
+            const handleLogout = () => {
+                setCurrentUser(null);
+                localStorage.removeItem('currentUserId');
+            };
+
+            if (loading) {
+                return (
+                    <div className="flex items-center justify-center min-h-screen">
+                        <div className="text-xl text-gray-600">Loading...</div>
+                    </div>
+                );
+            }
+
+            if (!db) {
+                return (
+                    <div className="max-w-2xl mx-auto p-6">
+                        <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 p-4 rounded-lg">
+                            <h2 className="font-bold text-lg mb-2">Firebase Not Configured</h2>
+                            <p>Please update the Firebase configuration in index.html with your project credentials.</p>
+                            <p className="mt-2 text-sm">See README.md for setup instructions.</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-4xl mx-auto p-4">
+                    <Header
+                        currentUser={currentUser}
+                        users={users}
+                        onLogout={handleLogout}
+                        view={view}
+                        setView={setView}
+                    />
+
+                    {!currentUser ? (
+                        <UserSelect
+                            users={users}
+                            onSelect={handleSelectUser}
+                        />
+                    ) : (
+                        <>
+                            <Navigation view={view} setView={setView} />
+
+                            {view === 'home' && (
+                                <HomeView
+                                    currentUser={currentUser}
+                                    users={users}
+                                    exercises={exercises}
+                                    teams={teams}
+                                />
+                            )}
+
+                            {view === 'log' && (
+                                <LogExercise
+                                    currentUser={currentUser}
+                                    onSuccess={() => setView('home')}
+                                />
+                            )}
+
+                            {view === 'stats' && (
+                                <MyStats
+                                    currentUser={currentUser}
+                                    users={users}
+                                    exercises={exercises}
+                                />
+                            )}
+
+                            {view === 'leaderboard' && (
+                                <Leaderboards
+                                    users={users}
+                                    exercises={exercises}
+                                    teams={teams}
+                                    currentUser={currentUser}
+                                />
+                            )}
+
+                            {view === 'teams' && (
+                                <TeamsView
+                                    currentUser={currentUser}
+                                    users={users}
+                                    teams={teams}
+                                />
+                            )}
+                        </>
+                    )}
+                </div>
+            );
+        }
+
+        // Header Component
+        function Header({ currentUser, users, onLogout, view, setView }) {
+            const currentWeek = getCurrentWeek();
+            const weeklyGoal = getWeeklyGoal(currentWeek);
+
+            return (
+                <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg p-6 mb-6 shadow-lg">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h1 className="text-2xl font-bold">Get Fit 2026</h1>
+                            <p className="text-blue-100 mt-1">
+                                {currentWeek === 0
+                                    ? `Starts ${formatDate(CHALLENGE_START)}`
+                                    : currentWeek > CHALLENGE_WEEKS
+                                        ? 'Challenge Complete!'
+                                        : `Week ${currentWeek} of ${CHALLENGE_WEEKS} | Goal: ${weeklyGoal} pts`
+                                }
+                            </p>
+                        </div>
+                        {currentUser && users[currentUser] && (
+                            <div className="text-right">
+                                <p className="font-medium">{users[currentUser].name}</p>
+                                <button
+                                    onClick={onLogout}
+                                    className="text-sm text-blue-200 hover:text-white mt-1"
+                                >
+                                    Switch User
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // User Selection Component
+        function UserSelect({ users, onSelect }) {
+            const [showCreate, setShowCreate] = useState(false);
+            const [newName, setNewName] = useState('');
+
+            const handleCreate = () => {
+                if (!newName.trim()) return;
+
+                const userId = generateId();
+                db.ref('users/' + userId).set({
+                    name: newName.trim(),
+                    odId: userId,
+                    createdAt: Date.now()
+                }).then(() => {
+                    onSelect(userId);
+                    setNewName('');
+                    setShowCreate(false);
+                });
+            };
+
+            const userList = Object.entries(users).sort((a, b) =>
+                a[1].name.localeCompare(b[1].name)
+            );
+
+            return (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                    <h2 className="text-xl font-semibold mb-4">Who's exercising today?</h2>
+
+                    {userList.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                            {userList.map(([id, user]) => (
+                                <button
+                                    key={id}
+                                    onClick={() => onSelect(id)}
+                                    className="p-4 bg-gray-50 hover:bg-blue-50 border-2 border-gray-200 hover:border-blue-400 rounded-lg text-center transition-colors"
+                                >
+                                    <span className="font-medium">{user.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {showCreate ? (
+                        <div className="border-t pt-4">
+                            <input
+                                type="text"
+                                value={newName}
+                                onChange={(e) => setNewName(e.target.value)}
+                                placeholder="Enter your name"
+                                className="w-full p-3 border rounded-lg mb-3"
+                                autoFocus
+                                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                            />
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handleCreate}
+                                    className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                                >
+                                    Create Profile
+                                </button>
+                                <button
+                                    onClick={() => setShowCreate(false)}
+                                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => setShowCreate(true)}
+                            className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                        >
+                            + Add New Person
+                        </button>
+                    )}
+                </div>
+            );
+        }
+
+        // Navigation Component
+        function Navigation({ view, setView }) {
+            const tabs = [
+                { id: 'home', label: 'Home' },
+                { id: 'log', label: 'Log Exercise' },
+                { id: 'stats', label: 'My Stats' },
+                { id: 'leaderboard', label: 'Leaderboard' },
+                { id: 'teams', label: 'Teams' }
+            ];
+
+            return (
+                <div className="flex gap-1 mb-6 bg-white rounded-lg p-1 shadow-sm overflow-x-auto">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setView(tab.id)}
+                            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                                view === tab.id
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+            );
+        }
+
+        // Home View Component
+        function HomeView({ currentUser, users, exercises, teams }) {
+            const currentWeek = getCurrentWeek();
+            const weeklyGoal = getWeeklyGoal(currentWeek);
+
+            // Calculate this week's points for current user
+            const weekStart = getWeekStart(currentWeek);
+            const weekEnd = getWeekEnd(currentWeek);
+
+            const weeklyPoints = useMemo(() => {
+                return Object.values(exercises)
+                    .filter(ex => {
+                        if (ex.odId !== currentUser) return false;
+                        const exDate = new Date(ex.date);
+                        return exDate >= weekStart && exDate <= weekEnd;
+                    })
+                    .reduce((sum, ex) => sum + ex.points, 0);
+            }, [exercises, currentUser, weekStart, weekEnd]);
+
+            const progress = Math.min((weeklyPoints / weeklyGoal) * 100, 100);
+            const goalMet = weeklyPoints >= weeklyGoal;
+
+            // Recent exercises
+            const recentExercises = useMemo(() => {
+                return Object.entries(exercises)
+                    .filter(([_, ex]) => ex.odId === currentUser)
+                    .sort((a, b) => new Date(b[1].date) - new Date(a[1].date))
+                    .slice(0, 5);
+            }, [exercises, currentUser]);
+
+            return (
+                <div className="space-y-6">
+                    {/* Weekly Progress */}
+                    <div className={`bg-white rounded-lg shadow-md p-6 ${goalMet ? 'ring-2 ring-green-500' : ''}`}>
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="font-semibold text-lg">
+                                {currentWeek === 0 ? 'Challenge Starts Soon!' : `Week ${currentWeek} Progress`}
+                            </h3>
+                            <span className={`text-2xl font-bold ${goalMet ? 'text-green-600' : 'text-blue-600'}`}>
+                                {weeklyPoints} / {weeklyGoal} pts
+                            </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                            <div
+                                className={`h-full rounded-full transition-all duration-500 ${goalMet ? 'bg-green-500' : 'bg-blue-600'}`}
+                                style={{ width: `${progress}%` }}
+                            />
+                        </div>
+                        {goalMet && (
+                            <p className="text-green-600 font-medium mt-2">
+                                Goal achieved! Keep going!
+                            </p>
+                        )}
+                        {currentWeek > 0 && (
+                            <p className="text-gray-500 text-sm mt-2">
+                                {formatDate(weekStart)} - {formatDate(weekEnd)}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Quick Log */}
+                    <QuickLog currentUser={currentUser} />
+
+                    {/* Recent Activity */}
+                    <div className="bg-white rounded-lg shadow-md p-6">
+                        <h3 className="font-semibold text-lg mb-4">Recent Activity</h3>
+                        {recentExercises.length === 0 ? (
+                            <p className="text-gray-500">No exercises logged yet. Get moving!</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {recentExercises.map(([id, ex]) => (
+                                    <div key={id} className="flex justify-between items-center py-2 border-b last:border-0">
+                                        <div>
+                                            <span className="font-medium">{ex.type || INTENSITIES[ex.intensity].label}</span>
+                                            <span className="text-gray-500 text-sm ml-2">
+                                                {ex.minutes} min
+                                            </span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="font-bold text-blue-600">{ex.points} pts</span>
+                                            <div className="text-gray-400 text-xs">
+                                                {new Date(ex.date).toLocaleDateString()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Quick Log Component
+        function QuickLog({ currentUser }) {
+            const [minutes, setMinutes] = useState('');
+            const [intensity, setIntensity] = useState('medium');
+            const [saving, setSaving] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!minutes || saving) return;
+
+                setSaving(true);
+                const points = parseInt(minutes) * INTENSITIES[intensity].points;
+                const exerciseId = generateId();
+
+                await db.ref('exercises/' + exerciseId).set({
+                    odId: currentUser,
+                    date: new Date().toISOString().split('T')[0],
+                    minutes: parseInt(minutes),
+                    intensity,
+                    points,
+                    createdAt: Date.now()
+                });
+
+                setMinutes('');
+                setSaving(false);
+            };
+
+            const previewPoints = minutes ? parseInt(minutes) * INTENSITIES[intensity].points : 0;
+
+            return (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                    <h3 className="font-semibold text-lg mb-4">Quick Log</h3>
+                    <form onSubmit={handleSubmit}>
+                        <div className="flex flex-wrap gap-4 items-end">
+                            <div className="flex-1 min-w-[120px]">
+                                <label className="block text-sm text-gray-600 mb-1">Minutes</label>
+                                <input
+                                    type="number"
+                                    value={minutes}
+                                    onChange={(e) => setMinutes(e.target.value)}
+                                    placeholder="30"
+                                    min="1"
+                                    className="w-full p-3 border rounded-lg"
+                                />
+                            </div>
+                            <div className="flex-1 min-w-[150px]">
+                                <label className="block text-sm text-gray-600 mb-1">Intensity</label>
+                                <select
+                                    value={intensity}
+                                    onChange={(e) => setIntensity(e.target.value)}
+                                    className="w-full p-3 border rounded-lg bg-white"
+                                >
+                                    {Object.entries(INTENSITIES).map(([key, val]) => (
+                                        <option key={key} value={key}>
+                                            {val.label} ({val.points}x)
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={!minutes || saving}
+                                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                            >
+                                {saving ? 'Saving...' : `Log ${previewPoints} pts`}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            );
+        }
+
+        // Log Exercise Component (Full Form)
+        function LogExercise({ currentUser, onSuccess }) {
+            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const [minutes, setMinutes] = useState('');
+            const [intensity, setIntensity] = useState('medium');
+            const [type, setType] = useState('');
+            const [saving, setSaving] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!minutes || saving) return;
+
+                setSaving(true);
+                const points = parseInt(minutes) * INTENSITIES[intensity].points;
+                const exerciseId = generateId();
+
+                await db.ref('exercises/' + exerciseId).set({
+                    odId: currentUser,
+                    date,
+                    minutes: parseInt(minutes),
+                    intensity,
+                    type: type.trim() || null,
+                    points,
+                    createdAt: Date.now()
+                });
+
+                setSaving(false);
+                onSuccess();
+            };
+
+            const previewPoints = minutes ? parseInt(minutes) * INTENSITIES[intensity].points : 0;
+
+            return (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                    <h2 className="text-xl font-semibold mb-6">Log Exercise</h2>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                            <input
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                className="w-full p-3 border rounded-lg"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Minutes</label>
+                            <input
+                                type="number"
+                                value={minutes}
+                                onChange={(e) => setMinutes(e.target.value)}
+                                placeholder="How many minutes?"
+                                min="1"
+                                className="w-full p-3 border rounded-lg"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Intensity</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {Object.entries(INTENSITIES).map(([key, val]) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        onClick={() => setIntensity(key)}
+                                        className={`p-4 rounded-lg border-2 text-left transition-colors ${
+                                            intensity === key
+                                                ? 'border-blue-500 bg-blue-50'
+                                                : 'border-gray-200 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        <div className="font-medium">{val.label} <span className="text-blue-600">({val.points} pt/min)</span></div>
+                                        <div className="text-sm text-gray-500 mt-1">{val.examples}</div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Exercise Type <span className="text-gray-400">(optional)</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={type}
+                                onChange={(e) => setType(e.target.value)}
+                                placeholder="e.g., Morning run, Yoga class"
+                                className="w-full p-3 border rounded-lg"
+                            />
+                        </div>
+
+                        {minutes && (
+                            <div className="bg-blue-50 p-4 rounded-lg text-center">
+                                <span className="text-gray-600">You'll earn </span>
+                                <span className="text-2xl font-bold text-blue-600">{previewPoints} points</span>
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={!minutes || saving}
+                            className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        >
+                            {saving ? 'Saving...' : 'Log Exercise'}
+                        </button>
+                    </form>
+                </div>
+            );
+        }
+
+        // My Stats Component
+        function MyStats({ currentUser, users, exercises }) {
+            const userExercises = useMemo(() => {
+                return Object.entries(exercises)
+                    .filter(([_, ex]) => ex.odId === currentUser)
+                    .sort((a, b) => new Date(b[1].date) - new Date(a[1].date));
+            }, [exercises, currentUser]);
+
+            const totalPoints = userExercises.reduce((sum, [_, ex]) => sum + ex.points, 0);
+            const totalMinutes = userExercises.reduce((sum, [_, ex]) => sum + ex.minutes, 0);
+
+            // Weekly breakdown
+            const weeklyStats = useMemo(() => {
+                const stats = [];
+                for (let week = 1; week <= CHALLENGE_WEEKS; week++) {
+                    const weekStart = getWeekStart(week);
+                    const weekEnd = getWeekEnd(week);
+                    const points = userExercises
+                        .filter(([_, ex]) => {
+                            const d = new Date(ex.date);
+                            return d >= weekStart && d <= weekEnd;
+                        })
+                        .reduce((sum, [_, ex]) => sum + ex.points, 0);
+                    stats.push({ week, points, goal: getWeeklyGoal(week) });
+                }
+                return stats;
+            }, [userExercises]);
+
+            const handleDelete = async (exerciseId) => {
+                if (confirm('Delete this exercise?')) {
+                    await db.ref('exercises/' + exerciseId).remove();
+                }
+            };
+
+            return (
+                <div className="space-y-6">
+                    {/* Summary */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+                            <div className="text-3xl font-bold text-blue-600">{totalPoints}</div>
+                            <div className="text-gray-500">Total Points</div>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+                            <div className="text-3xl font-bold text-purple-600">{totalMinutes}</div>
+                            <div className="text-gray-500">Total Minutes</div>
+                        </div>
+                    </div>
+
+                    {/* Weekly Progress */}
+                    <div className="bg-white rounded-lg shadow-md p-6">
+                        <h3 className="font-semibold text-lg mb-4">Weekly Progress</h3>
+                        <div className="space-y-2">
+                            {weeklyStats.map(({ week, points, goal }) => {
+                                const currentWeek = getCurrentWeek();
+                                const isCurrent = week === currentWeek;
+                                const isPast = week < currentWeek;
+                                const goalMet = points >= goal;
+
+                                return (
+                                    <div key={week} className={`flex items-center gap-3 ${!isPast && !isCurrent ? 'opacity-50' : ''}`}>
+                                        <div className="w-16 text-sm font-medium">
+                                            Week {week}
+                                            {isCurrent && <span className="text-blue-600"> *</span>}
+                                        </div>
+                                        <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full ${goalMet ? 'bg-green-500' : 'bg-blue-500'}`}
+                                                style={{ width: `${Math.min((points / goal) * 100, 100)}%` }}
+                                            />
+                                        </div>
+                                        <div className="w-24 text-right text-sm">
+                                            <span className={goalMet ? 'text-green-600 font-medium' : ''}>
+                                                {points}
+                                            </span>
+                                            <span className="text-gray-400"> / {goal}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Exercise History */}
+                    <div className="bg-white rounded-lg shadow-md p-6">
+                        <h3 className="font-semibold text-lg mb-4">Exercise History</h3>
+                        {userExercises.length === 0 ? (
+                            <p className="text-gray-500">No exercises logged yet.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {userExercises.map(([id, ex]) => (
+                                    <div key={id} className="flex justify-between items-center py-3 border-b last:border-0">
+                                        <div>
+                                            <div className="font-medium">
+                                                {ex.type || INTENSITIES[ex.intensity].label}
+                                            </div>
+                                            <div className="text-sm text-gray-500">
+                                                {new Date(ex.date).toLocaleDateString()} • {ex.minutes} min • {INTENSITIES[ex.intensity].label}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="font-bold text-blue-600">{ex.points} pts</span>
+                                            <button
+                                                onClick={() => handleDelete(id)}
+                                                className="text-gray-400 hover:text-red-500"
+                                            >
+                                                &times;
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Leaderboards Component
+        function Leaderboards({ users, exercises, teams, currentUser }) {
+            const [showWeekly, setShowWeekly] = useState(true);
+            const [showTeams, setShowTeams] = useState(false);
+
+            const currentWeek = getCurrentWeek();
+            const weekStart = getWeekStart(currentWeek);
+            const weekEnd = getWeekEnd(currentWeek);
+
+            // Individual rankings
+            const individualRankings = useMemo(() => {
+                const userPoints = {};
+                Object.values(users).forEach(user => {
+                    userPoints[user.odId] = { name: user.name, total: 0, weekly: 0 };
+                });
+
+                Object.values(exercises).forEach(ex => {
+                    if (!userPoints[ex.odId]) return;
+                    userPoints[ex.odId].total += ex.points;
+
+                    const exDate = new Date(ex.date);
+                    if (exDate >= weekStart && exDate <= weekEnd) {
+                        userPoints[ex.odId].weekly += ex.points;
+                    }
+                });
+
+                return Object.entries(userPoints)
+                    .map(([id, data]) => ({ id, ...data }))
+                    .sort((a, b) => showWeekly ? b.weekly - a.weekly : b.total - a.total);
+            }, [users, exercises, showWeekly, weekStart, weekEnd]);
+
+            // Team rankings
+            const teamRankings = useMemo(() => {
+                const teamPoints = {};
+                Object.entries(teams).forEach(([id, team]) => {
+                    teamPoints[id] = { name: team.name, total: 0, weekly: 0, members: team.members || [] };
+                });
+
+                Object.values(exercises).forEach(ex => {
+                    // Find which team this user belongs to
+                    Object.entries(teamPoints).forEach(([teamId, team]) => {
+                        if (team.members.includes(ex.odId)) {
+                            team.total += ex.points;
+                            const exDate = new Date(ex.date);
+                            if (exDate >= weekStart && exDate <= weekEnd) {
+                                team.weekly += ex.points;
+                            }
+                        }
+                    });
+                });
+
+                return Object.entries(teamPoints)
+                    .map(([id, data]) => ({ id, ...data }))
+                    .sort((a, b) => showWeekly ? b.weekly - a.weekly : b.total - a.total);
+            }, [teams, exercises, showWeekly, weekStart, weekEnd]);
+
+            const rankings = showTeams ? teamRankings : individualRankings;
+
+            return (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                    <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
+                        <h2 className="text-xl font-semibold">Leaderboard</h2>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setShowTeams(false)}
+                                className={`px-3 py-1 rounded-full text-sm ${!showTeams ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+                            >
+                                Individual
+                            </button>
+                            <button
+                                onClick={() => setShowTeams(true)}
+                                className={`px-3 py-1 rounded-full text-sm ${showTeams ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+                            >
+                                Teams
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2 mb-4">
+                        <button
+                            onClick={() => setShowWeekly(true)}
+                            className={`px-3 py-1 rounded text-sm ${showWeekly ? 'bg-gray-200 font-medium' : 'text-gray-500'}`}
+                        >
+                            This Week
+                        </button>
+                        <button
+                            onClick={() => setShowWeekly(false)}
+                            className={`px-3 py-1 rounded text-sm ${!showWeekly ? 'bg-gray-200 font-medium' : 'text-gray-500'}`}
+                        >
+                            All Time
+                        </button>
+                    </div>
+
+                    {rankings.length === 0 ? (
+                        <p className="text-gray-500">
+                            {showTeams ? 'No teams created yet.' : 'No participants yet.'}
+                        </p>
+                    ) : (
+                        <div className="space-y-2">
+                            {rankings.map((entry, index) => {
+                                const isCurrentUser = !showTeams && entry.id === currentUser;
+                                const points = showWeekly ? entry.weekly : entry.total;
+
+                                return (
+                                    <div
+                                        key={entry.id}
+                                        className={`flex items-center gap-4 p-3 rounded-lg ${
+                                            isCurrentUser ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'
+                                        }`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                                            index === 0 ? 'bg-yellow-400 text-yellow-900' :
+                                            index === 1 ? 'bg-gray-300 text-gray-700' :
+                                            index === 2 ? 'bg-orange-300 text-orange-900' :
+                                            'bg-gray-200 text-gray-600'
+                                        }`}>
+                                            {index + 1}
+                                        </div>
+                                        <div className="flex-1">
+                                            <span className="font-medium">{entry.name}</span>
+                                            {showTeams && entry.members && (
+                                                <span className="text-gray-400 text-sm ml-2">
+                                                    ({entry.members.length} members)
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="font-bold text-blue-600">{points} pts</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Teams View Component
+        function TeamsView({ currentUser, users, teams }) {
+            const [showCreate, setShowCreate] = useState(false);
+            const [newTeamName, setNewTeamName] = useState('');
+
+            const currentUserData = users[currentUser];
+
+            // Find user's current team
+            const userTeam = useMemo(() => {
+                for (const [id, team] of Object.entries(teams)) {
+                    if (team.members && team.members.includes(currentUser)) {
+                        return { id, ...team };
+                    }
+                }
+                return null;
+            }, [teams, currentUser]);
+
+            const handleCreateTeam = async () => {
+                if (!newTeamName.trim()) return;
+
+                const teamId = generateId();
+                await db.ref('teams/' + teamId).set({
+                    name: newTeamName.trim(),
+                    members: [currentUser],
+                    createdAt: Date.now()
+                });
+
+                setNewTeamName('');
+                setShowCreate(false);
+            };
+
+            const handleJoinTeam = async (teamId) => {
+                // Leave current team first
+                if (userTeam) {
+                    const newMembers = userTeam.members.filter(id => id !== currentUser);
+                    if (newMembers.length === 0) {
+                        await db.ref('teams/' + userTeam.id).remove();
+                    } else {
+                        await db.ref('teams/' + userTeam.id + '/members').set(newMembers);
+                    }
+                }
+
+                // Join new team
+                const team = teams[teamId];
+                const newMembers = [...(team.members || []), currentUser];
+                await db.ref('teams/' + teamId + '/members').set(newMembers);
+            };
+
+            const handleLeaveTeam = async () => {
+                if (!userTeam) return;
+
+                const newMembers = userTeam.members.filter(id => id !== currentUser);
+                if (newMembers.length === 0) {
+                    await db.ref('teams/' + userTeam.id).remove();
+                } else {
+                    await db.ref('teams/' + userTeam.id + '/members').set(newMembers);
+                }
+            };
+
+            return (
+                <div className="space-y-6">
+                    {/* Current Team */}
+                    <div className="bg-white rounded-lg shadow-md p-6">
+                        <h3 className="font-semibold text-lg mb-4">Your Team</h3>
+                        {userTeam ? (
+                            <div>
+                                <div className="flex justify-between items-center mb-4">
+                                    <span className="text-xl font-medium">{userTeam.name}</span>
+                                    <button
+                                        onClick={handleLeaveTeam}
+                                        className="text-red-500 hover:text-red-700 text-sm"
+                                    >
+                                        Leave Team
+                                    </button>
+                                </div>
+                                <div className="space-y-2">
+                                    <p className="text-sm text-gray-500 mb-2">Team Members:</p>
+                                    {userTeam.members.map(memberId => (
+                                        <div key={memberId} className="flex items-center gap-2">
+                                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-medium">
+                                                {(users[memberId]?.name || '?')[0]}
+                                            </div>
+                                            <span>{users[memberId]?.name || 'Unknown'}</span>
+                                            {memberId === currentUser && (
+                                                <span className="text-xs text-gray-400">(you)</span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-gray-500">You're not on a team yet. Join or create one below!</p>
+                        )}
+                    </div>
+
+                    {/* Available Teams */}
+                    <div className="bg-white rounded-lg shadow-md p-6">
+                        <h3 className="font-semibold text-lg mb-4">Available Teams</h3>
+                        {Object.entries(teams).length === 0 ? (
+                            <p className="text-gray-500 mb-4">No teams yet. Create the first one!</p>
+                        ) : (
+                            <div className="space-y-3 mb-4">
+                                {Object.entries(teams).map(([id, team]) => {
+                                    const isUserTeam = userTeam?.id === id;
+                                    return (
+                                        <div key={id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                            <div>
+                                                <span className="font-medium">{team.name}</span>
+                                                <span className="text-gray-400 text-sm ml-2">
+                                                    ({team.members?.length || 0} members)
+                                                </span>
+                                            </div>
+                                            {!isUserTeam && (
+                                                <button
+                                                    onClick={() => handleJoinTeam(id)}
+                                                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                                >
+                                                    Join
+                                                </button>
+                                            )}
+                                            {isUserTeam && (
+                                                <span className="text-green-600 text-sm font-medium">Joined</span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {showCreate ? (
+                            <div className="border-t pt-4">
+                                <input
+                                    type="text"
+                                    value={newTeamName}
+                                    onChange={(e) => setNewTeamName(e.target.value)}
+                                    placeholder="Team name"
+                                    className="w-full p-3 border rounded-lg mb-3"
+                                    autoFocus
+                                    onKeyDown={(e) => e.key === 'Enter' && handleCreateTeam()}
+                                />
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={handleCreateTeam}
+                                        className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                                    >
+                                        Create Team
+                                    </button>
+                                    <button
+                                        onClick={() => setShowCreate(false)}
+                                        className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => setShowCreate(true)}
+                                className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                            >
+                                + Create New Team
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Render the app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
