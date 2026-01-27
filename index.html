@@ -67,6 +67,14 @@
             return STARTING_GOAL + (week - 1) * WEEKLY_INCREMENT;
         };
 
+        const getLocalDateString = () => {
+            const d = new Date();
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
         const getWeekStart = (week) => {
             const start = new Date(CHALLENGE_START);
             start.setDate(start.getDate() + (week - 1) * 7);
@@ -481,7 +489,7 @@
 
                 await db.ref('exercises/' + exerciseId).set({
                     odId: currentUser,
-                    date: new Date().toISOString().split('T')[0],
+                    date: getLocalDateString(),
                     minutes: parseInt(minutes),
                     intensity,
                     points,
@@ -539,7 +547,7 @@
 
         // Log Exercise Component (Full Form)
         function LogExercise({ currentUser, onSuccess }) {
-            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const [date, setDate] = useState(getLocalDateString());
             const [minutes, setMinutes] = useState('');
             const [intensity, setIntensity] = useState('medium');
             const [type, setType] = useState('');
