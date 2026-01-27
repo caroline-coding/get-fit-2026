@@ -921,6 +921,16 @@
             const handleCreateTeam = async () => {
                 if (!newTeamName.trim()) return;
 
+                // Leave current team first
+                if (userTeam) {
+                    const newMembers = userTeam.members.filter(id => id !== currentUser);
+                    if (newMembers.length === 0) {
+                        await db.ref('teams/' + userTeam.id).remove();
+                    } else {
+                        await db.ref('teams/' + userTeam.id + '/members').set(newMembers);
+                    }
+                }
+
                 const teamId = generateId();
                 await db.ref('teams/' + teamId).set({
                     name: newTeamName.trim(),
