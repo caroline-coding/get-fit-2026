@@ -91,6 +91,11 @@
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         };
 
+        const parseLocalDate = (dateStr) => {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            return new Date(y, m - 1, d);
+        };
+
         const generateId = () => Math.random().toString(36).substr(2, 9);
 
         // Main App Component
@@ -393,7 +398,7 @@
                 return Object.values(exercises)
                     .filter(ex => {
                         if (ex.odId !== currentUser) return false;
-                        const exDate = new Date(ex.date);
+                        const exDate = parseLocalDate(ex.date);
                         return exDate >= weekStart && exDate <= weekEnd;
                     })
                     .reduce((sum, ex) => sum + ex.points, 0);
@@ -461,7 +466,7 @@
                                         <div className="text-right">
                                             <span className="font-bold text-blue-600">{ex.points} pts</span>
                                             <div className="text-gray-400 text-xs">
-                                                {new Date(ex.date).toLocaleDateString()}
+                                                {parseLocalDate(ex.date).toLocaleDateString()}
                                             </div>
                                         </div>
                                     </div>
@@ -675,7 +680,7 @@
                     const weekEnd = getWeekEnd(week);
                     const points = userExercises
                         .filter(([_, ex]) => {
-                            const d = new Date(ex.date);
+                            const d = parseLocalDate(ex.date);
                             return d >= weekStart && d <= weekEnd;
                         })
                         .reduce((sum, [_, ex]) => sum + ex.points, 0);
@@ -752,7 +757,7 @@
                                                 {ex.type || INTENSITIES[ex.intensity].label}
                                             </div>
                                             <div className="text-sm text-gray-500">
-                                                {new Date(ex.date).toLocaleDateString()} • {ex.minutes} min • {INTENSITIES[ex.intensity].label}
+                                                {parseLocalDate(ex.date).toLocaleDateString()} • {ex.minutes} min • {INTENSITIES[ex.intensity].label}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3">
@@ -793,7 +798,7 @@
                     if (!userPoints[ex.odId]) return;
                     userPoints[ex.odId].total += ex.points;
 
-                    const exDate = new Date(ex.date);
+                    const exDate = parseLocalDate(ex.date);
                     if (exDate >= weekStart && exDate <= weekEnd) {
                         userPoints[ex.odId].weekly += ex.points;
                     }
@@ -816,7 +821,7 @@
                     Object.entries(teamPoints).forEach(([teamId, team]) => {
                         if (team.members.includes(ex.odId)) {
                             team.total += ex.points;
-                            const exDate = new Date(ex.date);
+                            const exDate = parseLocalDate(ex.date);
                             if (exDate >= weekStart && exDate <= weekEnd) {
                                 team.weekly += ex.points;
                             }
