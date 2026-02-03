@@ -830,8 +830,11 @@
                 });
 
                 return Object.entries(teamPoints)
-                    .map(([id, data]) => ({ id, ...data }))
-                    .sort((a, b) => showWeekly ? b.weekly - a.weekly : b.total - a.total);
+                    .map(([id, data]) => {
+                        const count = data.members.length || 1;
+                        return { id, ...data, avgWeekly: data.weekly / count, avgTotal: data.total / count };
+                    })
+                    .sort((a, b) => showWeekly ? b.avgWeekly - a.avgWeekly : b.avgTotal - a.avgTotal);
             }, [teams, exercises, showWeekly, weekStart, weekEnd]);
 
             const rankings = showTeams ? teamRankings : individualRankings;
@@ -879,7 +882,9 @@
                         <div className="space-y-2">
                             {rankings.map((entry, index) => {
                                 const isCurrentUser = !showTeams && entry.id === currentUser;
-                                const points = showWeekly ? entry.weekly : entry.total;
+                                const points = showTeams
+                                    ? Math.round(showWeekly ? entry.avgWeekly : entry.avgTotal)
+                                    : (showWeekly ? entry.weekly : entry.total);
 
                                 return (
                                     <div
@@ -904,7 +909,7 @@
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="font-bold text-blue-600">{points} pts</div>
+                                        <div className="font-bold text-blue-600">{points} {showTeams ? 'avg pts' : 'pts'}</div>
                                     </div>
                                 );
                             })}
