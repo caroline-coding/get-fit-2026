@@ -782,6 +782,7 @@
         function Leaderboards({ users, exercises, teams, currentUser }) {
             const [showWeekly, setShowWeekly] = useState(true);
             const [showTeams, setShowTeams] = useState(false);
+            const [selectedUser, setSelectedUser] = useState(null);
 
             const currentWeek = getCurrentWeek();
             const weekStart = getWeekStart(currentWeek);
@@ -840,6 +841,7 @@
             const rankings = showTeams ? teamRankings : individualRankings;
 
             return (
+                <>
                 <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
                         <h2 className="text-xl font-semibold">Leaderboard</h2>
@@ -902,7 +904,16 @@
                                             {index + 1}
                                         </div>
                                         <div className="flex-1">
-                                            <span className="font-medium">{entry.name}</span>
+                                            {!showTeams ? (
+                                                <button
+                                                    onClick={() => setSelectedUser(entry.id)}
+                                                    className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
+                                                >
+                                                    {entry.name}
+                                                </button>
+                                            ) : (
+                                                <span className="font-medium">{entry.name}</span>
+                                            )}
                                             {showTeams && entry.members && (
                                                 <span className="text-gray-400 text-sm ml-2">
                                                     ({entry.members.length} members)
@@ -915,6 +926,78 @@
                             })}
                         </div>
                     )}
+                </div>
+
+                {/* User Exercise History Modal */}
+                {selectedUser && (
+                    <UserHistoryModal
+                        userId={selectedUser}
+                        users={users}
+                        exercises={exercises}
+                        onClose={() => setSelectedUser(null)}
+                    />
+                )}
+            </>
+            );
+        }
+
+        // User History Modal Component
+        function UserHistoryModal({ userId, users, exercises, onClose }) {
+            const user = users[userId];
+            const userExercises = useMemo(() => {
+                return Object.entries(exercises)
+                    .filter(([_, ex]) => ex.odId === userId)
+                    .sort((a, b) => new Date(b[1].date) - new Date(a[1].date));
+            }, [exercises, userId]);
+
+            const totalPoints = userExercises.reduce((sum, [_, ex]) => sum + ex.points, 0);
+            const totalMinutes = userExercises.reduce((sum, [_, ex]) => sum + ex.minutes, 0);
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+                    <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                            <h3 className="text-lg font-semibold">{user?.name || 'Unknown'}'s Exercise History</h3>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+                        </div>
+
+                        <div className="p-4">
+                            {/* Summary */}
+                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                <div className="bg-blue-50 rounded-lg p-3 text-center">
+                                    <div className="text-2xl font-bold text-blue-600">{totalPoints}</div>
+                                    <div className="text-sm text-gray-500">Total Points</div>
+                                </div>
+                                <div className="bg-purple-50 rounded-lg p-3 text-center">
+                                    <div className="text-2xl font-bold text-purple-600">{totalMinutes}</div>
+                                    <div className="text-sm text-gray-500">Total Minutes</div>
+                                </div>
+                            </div>
+
+                            {/* Exercise List */}
+                            <div className="overflow-y-auto max-h-[50vh]">
+                                {userExercises.length === 0 ? (
+                                    <p className="text-gray-500 text-center py-4">No exercises logged yet.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {userExercises.map(([id, ex]) => (
+                                            <div key={id} className="flex justify-between items-center py-2 border-b last:border-0">
+                                                <div>
+                                                    <div className="font-medium">
+                                                        {ex.type || INTENSITIES[ex.intensity].label}
+                                                    </div>
+                                                    <div className="text-sm text-gray-500">
+                                                        {parseLocalDate(ex.date).toLocaleDateString()} • {ex.minutes} min • {INTENSITIES[ex.intensity].label}
+                                                    </div>
+                                                </div>
+                                                <span className="font-bold text-blue-600">{ex.points} pts</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             );
         }
@@ -1024,33 +1107,50 @@
                         )}
                     </div>
 
-                    {/* Available Teams */}
+                    {/* All Teams */}
                     <div className="bg-white rounded-lg shadow-md p-6">
-                        <h3 className="font-semibold text-lg mb-4">Available Teams</h3>
+                        <h3 className="font-semibold text-lg mb-4">All Teams</h3>
                         {Object.entries(teams).length === 0 ? (
                             <p className="text-gray-500 mb-4">No teams yet. Create the first one!</p>
                         ) : (
-                            <div className="space-y-3 mb-4">
+                            <div className="space-y-4 mb-4">
                                 {Object.entries(teams).map(([id, team]) => {
                                     const isUserTeam = userTeam?.id === id;
                                     return (
-                                        <div key={id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                            <div>
-                                                <span className="font-medium">{team.name}</span>
-                                                <span className="text-gray-400 text-sm ml-2">
-                                                    ({team.members?.length || 0} members)
-                                                </span>
+                                        <div key={id} className="p-4 bg-gray-50 rounded-lg">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <div>
+                                                    <span className="font-medium text-lg">{team.name}</span>
+                                                    <span className="text-gray-400 text-sm ml-2">
+                                                        ({team.members?.length || 0} members)
+                                                    </span>
+                                                </div>
+                                                {!isUserTeam && (
+                                                    <button
+                                                        onClick={() => handleJoinTeam(id)}
+                                                        className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                                    >
+                                                        Join
+                                                    </button>
+                                                )}
+                                                {isUserTeam && (
+                                                    <span className="text-green-600 text-sm font-medium">Your Team</span>
+                                                )}
                                             </div>
-                                            {!isUserTeam && (
-                                                <button
-                                                    onClick={() => handleJoinTeam(id)}
-                                                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                                                >
-                                                    Join
-                                                </button>
-                                            )}
-                                            {isUserTeam && (
-                                                <span className="text-green-600 text-sm font-medium">Joined</span>
+                                            {team.members && team.members.length > 0 && (
+                                                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+                                                    {team.members.map(memberId => (
+                                                        <div key={memberId} className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-full text-sm">
+                                                            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xs font-medium">
+                                                                {(users[memberId]?.name || '?')[0]}
+                                                            </div>
+                                                            <span>{users[memberId]?.name || 'Unknown'}</span>
+                                                            {memberId === currentUser && (
+                                                                <span className="text-xs text-gray-400">(you)</span>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             )}
                                         </div>
                                     );
