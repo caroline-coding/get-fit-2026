@@ -783,6 +783,7 @@
             const [showWeekly, setShowWeekly] = useState(true);
             const [showTeams, setShowTeams] = useState(false);
             const [selectedUser, setSelectedUser] = useState(null);
+            const [showTeamStats, setShowTeamStats] = useState(false);
 
             const currentWeek = getCurrentWeek();
             const weekStart = getWeekStart(currentWeek);
@@ -838,6 +839,59 @@
                     .sort((a, b) => showWeekly ? b.avgWeekly - a.avgWeekly : b.avgTotal - a.avgTotal);
             }, [teams, exercises, showWeekly, weekStart, weekEnd]);
 
+            // Team weekly stats - average minutes per week and weekly winners
+            const teamWeeklyStats = useMemo(() => {
+                const stats = [];
+                const teamList = Object.entries(teams);
+                if (teamList.length === 0) return stats;
+
+                for (let week = 1; week <= Math.min(currentWeek, CHALLENGE_WEEKS); week++) {
+                    const wStart = getWeekStart(week);
+                    const wEnd = getWeekEnd(week);
+
+                    const teamData = teamList.map(([teamId, team]) => {
+                        const members = team.members || [];
+                        let totalMinutes = 0;
+                        let totalPoints = 0;
+
+                        Object.values(exercises).forEach(ex => {
+                            if (members.includes(ex.odId)) {
+                                const exDate = parseLocalDate(ex.date);
+                                if (exDate >= wStart && exDate <= wEnd) {
+                                    totalMinutes += ex.minutes;
+                                    totalPoints += ex.points;
+                                }
+                            }
+                        });
+
+                        const memberCount = members.length || 1;
+                        return {
+                            teamId,
+                            name: team.name,
+                            avgMinutes: totalMinutes / memberCount,
+                            avgPoints: totalPoints / memberCount,
+                            memberCount
+                        };
+                    });
+
+                    // Find winner (highest avg points)
+                    const winner = teamData.reduce((best, team) =>
+                        team.avgPoints > best.avgPoints ? team : best
+                    , teamData[0]);
+
+                    // Check for ties
+                    const tiedTeams = teamData.filter(t => t.avgPoints === winner.avgPoints);
+
+                    stats.push({
+                        week,
+                        teams: teamData,
+                        winner: tiedTeams.length > 1 ? null : winner,
+                        tiedTeams: tiedTeams.length > 1 ? tiedTeams : null
+                    });
+                }
+                return stats;
+            }, [teams, exercises, currentWeek]);
+
             const rankings = showTeams ? teamRankings : individualRankings;
 
             return (
@@ -847,20 +901,84 @@
                         <h2 className="text-xl font-semibold">Leaderboard</h2>
                         <div className="flex gap-2">
                             <button
-                                onClick={() => setShowTeams(false)}
-                                className={`px-3 py-1 rounded-full text-sm ${!showTeams ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+                                onClick={() => { setShowTeams(false); setShowTeamStats(false); }}
+                                className={`px-3 py-1 rounded-full text-sm ${!showTeams && !showTeamStats ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
                             >
                                 Individual
                             </button>
                             <button
-                                onClick={() => setShowTeams(true)}
-                                className={`px-3 py-1 rounded-full text-sm ${showTeams ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+                                onClick={() => { setShowTeams(true); setShowTeamStats(false); }}
+                                className={`px-3 py-1 rounded-full text-sm ${showTeams && !showTeamStats ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
                             >
                                 Teams
+                            </button>
+                            <button
+                                onClick={() => setShowTeamStats(true)}
+                                className={`px-3 py-1 rounded-full text-sm ${showTeamStats ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+                            >
+                                Weekly Stats
                             </button>
                         </div>
                     </div>
 
+                    {showTeamStats ? (
+                        /* Team Weekly Stats View */
+                        <div>
+                            {Object.keys(teams).length === 0 ? (
+                                <p className="text-gray-500">No teams created yet.</p>
+                            ) : teamWeeklyStats.length === 0 ? (
+                                <p className="text-gray-500">Challenge hasn't started yet.</p>
+                            ) : (
+                                <div className="space-y-4">
+                                    {teamWeeklyStats.map(({ week, teams: weekTeams, winner, tiedTeams }) => (
+                                        <div key={week} className="border rounded-lg overflow-hidden">
+                                            <div className="bg-gray-100 px-4 py-2 flex justify-between items-center">
+                                                <span className="font-medium">
+                                                    Week {week}
+                                                    {week === currentWeek && <span className="text-blue-600 ml-2">(current)</span>}
+                                                </span>
+                                                <span className={`text-sm font-medium ${winner ? 'text-green-600' : 'text-yellow-600'}`}>
+                                                    {winner ? (
+                                                        <>🏆 {winner.name}</>
+                                                    ) : tiedTeams ? (
+                                                        <>🤝 Tie: {tiedTeams.map(t => t.name).join(' & ')}</>
+                                                    ) : (
+                                                        'No data'
+                                                    )}
+                                                </span>
+                                            </div>
+                                            <div className="divide-y">
+                                                {weekTeams.sort((a, b) => b.avgPoints - a.avgPoints).map((team, idx) => (
+                                                    <div key={team.teamId} className={`px-4 py-3 flex justify-between items-center ${
+                                                        winner && team.teamId === winner.teamId ? 'bg-green-50' : ''
+                                                    }`}>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                                                idx === 0 ? 'bg-yellow-400 text-yellow-900' :
+                                                                idx === 1 ? 'bg-gray-300 text-gray-700' :
+                                                                idx === 2 ? 'bg-orange-300 text-orange-900' :
+                                                                'bg-gray-200 text-gray-600'
+                                                            }`}>
+                                                                {idx + 1}
+                                                            </span>
+                                                            <span className="font-medium">{team.name}</span>
+                                                            <span className="text-gray-400 text-sm">({team.memberCount} members)</span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="font-bold text-blue-600">{Math.round(team.avgPoints)} avg pts</div>
+                                                            <div className="text-sm text-gray-500">{Math.round(team.avgMinutes)} avg min</div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        /* Regular Leaderboard View */
+                        <>
                     <div className="flex gap-2 mb-4">
                         <button
                             onClick={() => setShowWeekly(true)}
@@ -925,6 +1043,8 @@
                                 );
                             })}
                         </div>
+                    )}
+                        </>
                     )}
                 </div>
 
